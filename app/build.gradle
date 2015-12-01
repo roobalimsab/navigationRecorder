@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "navigation.tw.com.twnavigation"
-        minSdkVersion 21
+        minSdkVersion 22
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
@@ -21,4 +21,5 @@ android {
 
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile 'com.google.android.gms:play-services-appindexing:8.1.0'
 }
