@@ -33,9 +33,13 @@
             android:id="@+id/network_signals"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical" />
 
-        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/matched_locations"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
 
         <EditText
             android:id="@+id/enter_location_name"

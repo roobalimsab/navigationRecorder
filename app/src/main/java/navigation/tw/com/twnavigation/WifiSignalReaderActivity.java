@@ -1,32 +1,24 @@
 package navigation.tw.com.twnavigation;
 
 import android.app.Activity;
-import android.content.*;
-import android.database.sqlite.SQLiteDatabase;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.net.ConnectivityManager;
-import android.net.Uri;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-
-import com.google.android.gms.appindexing.Action;
-import com.google.android.gms.appindexing.AppIndex;
-import com.google.android.gms.common.api.GoogleApiClient;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,13 +29,13 @@ import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
 import static android.net.wifi.WifiManager.RSSI_CHANGED_ACTION;
 import static android.net.wifi.WifiManager.SCAN_RESULTS_AVAILABLE_ACTION;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static navigation.tw.com.twnavigation.LocationDatabase.*;
 
 
 public class WifiSignalReaderActivity extends Activity implements SensorEventListener {
 
     private static final String TAG = "WifiSingnalReader";
     private static final float MAGNETIC_FIELD_DELTA = 5;
+    private static final long REFRESH_DURATION = 20000;
 
     private LinearLayout networksView;
     private ScrollView scrollView;
@@ -53,12 +45,12 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
     private Sensor magneticFieldSensor;
     private TextView mfz;
 
-    private static final int MSG_FETCH_STRENGTH = 101;
+    private static final int MSG_FETCH_WIFI_STRENGTH = 101;
     Handler H = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
-                case MSG_FETCH_STRENGTH:
+                case MSG_FETCH_WIFI_STRENGTH:
                     readSignalStrength();
                     break;
             }
@@ -67,35 +59,22 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
     private Map<String, String> signalStrengths = new HashMap<>();
 
-    private SensorEvent previousEvent;
-    private float previousX;
-    private float previousY;
-    private float previousZ;
-
+    private float[] previousEvent;
     private LocationDatabase locationDatabase;
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
-    private GoogleApiClient client;
+    private LinearLayout matchedLocationsView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_wifi_signal_reader);
-
         setupViews();
 
         setupWifiSignalReceivers();
         setupSensorReceivers();
 
-        H.sendEmptyMessage(MSG_FETCH_STRENGTH);
-
         locationDatabase = new LocationDatabase(this);
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
+        H.sendEmptyMessage(MSG_FETCH_WIFI_STRENGTH);
     }
 
     private void setupSensorReceivers() {
@@ -117,6 +96,8 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         mfy = (TextView) findViewById(R.id.mfy);
         mfz = (TextView) findViewById(R.id.mfz);
 
+        matchedLocationsView = (LinearLayout) findViewById(R.id.matched_locations);
+
         final EditText locationNameView = (EditText) findViewById(R.id.enter_location_name);
         findViewById(R.id.record_location).setOnClickListener(new View.OnClickListener() {
 
@@ -126,30 +107,10 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
                 if (locationName.isEmpty()) {
                     return;
                 }
-                recordLocation(locationName);
+                locationDatabase.recordLocation(
+                        new BuildingLocation(locationName, signalStrengths, previousEvent));
             }
         });
-    }
-
-    private void recordLocation(String locationName) {
-        SQLiteDatabase writableDatabase = locationDatabase.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_NAME, locationName);
-        values.put(COLUMN_MFX, previousX);
-        values.put(COLUMN_MFY, previousY);
-        values.put(COLUMN_MFZ, previousZ);
-
-        // i'm ashamed of this code
-        int i = 1;
-        for (String apName : signalStrengths.keySet()) {
-            values.put("ap" + i + "name", apName);
-            values.put("ap" + i + "value", signalStrengths.get(apName));
-            i++;
-            if (i > 5) {
-                break;
-            }
-        }
-        writableDatabase.insert(LOCATION_TABLE_NAME, COLUMN_NAME, values);
     }
 
     private BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
@@ -162,29 +123,62 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
     private void readSignalStrength() {
         networksView.removeAllViews();
+        matchedLocationsView.removeAllViews();
         signalStrengths.clear();
+
         WifiManager wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
         List<ScanResult> aps = wifiManager.getScanResults();
-        addTextViewToLayout("Found " + aps.size() + " APs");
+        addTextViewToLayout(networksView, "Found " + aps.size() + " APs");
         for (ScanResult ap : aps) {
             addNetwork(ap);
         }
+        findOutCurrentLocation(signalStrengths);
         scrollView.fullScroll(View.FOCUS_DOWN);
-        H.sendEmptyMessageDelayed(MSG_FETCH_STRENGTH, 500);
+        H.sendEmptyMessageDelayed(MSG_FETCH_WIFI_STRENGTH, REFRESH_DURATION);
     }
 
     private void addNetwork(ScanResult ap) {
         if (ap.SSID.equalsIgnoreCase("twguest")) {
             int strength = WifiManager.calculateSignalLevel(ap.level, 50);
-            addTextViewToLayout(ap.BSSID + " <-|-> " + strength);
+            addTextViewToLayout(networksView, ap.BSSID + " <-|-> " + strength);
             signalStrengths.put(ap.BSSID, String.valueOf(strength));
         }
     }
 
-    private void addTextViewToLayout(String text) {
+    private void findOutCurrentLocation(Map<String, String> currentSignals) {
+        List<BuildingLocation> buildingLocations = locationDatabase.fetchRecordedLocations();
+        addTextViewToLayout(matchedLocationsView, "db has " + buildingLocations.size() + " locations");
+        List<BuildingLocation> matchingLocations = findMatch(buildingLocations, currentSignals);
+        addTextViewToLayout(matchedLocationsView, "only " + matchingLocations.size() + " locations matched");
+        displayMatchedLocation(matchingLocations);
+    }
+
+    private void displayMatchedLocation(List<BuildingLocation> matchingLocations) {
+        if (matchingLocations.size() == 0) {
+            addTextViewToLayout(matchedLocationsView, "not found");
+        }
+
+        for (BuildingLocation location : matchingLocations) {
+            addTextViewToLayout(matchedLocationsView, location.getName());
+        }
+    }
+
+    private List<BuildingLocation> findMatch(
+            List<BuildingLocation> buildingLocations,
+            Map<String, String> currentSignals) {
+        List<BuildingLocation> matchedLocations = new ArrayList<>();
+        for(BuildingLocation location : buildingLocations) {
+            if (location.isMatching(currentSignals)) {
+                matchedLocations.add(location);
+            }
+        }
+        return matchedLocations;
+    }
+
+    private void addTextViewToLayout(LinearLayout layout, String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        networksView.addView(tv, new LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        layout.addView(tv, new LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
     }
 
     @Override
@@ -194,10 +188,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
             mfy.setText("y: " + event.values[1]);
             mfz.setText("z: " + event.values[2]);
 
-            previousEvent = event;
-            previousX = event.values[0];
-            previousY = event.values[1];
-            previousZ = event.values[2];
+            previousEvent = event.values.clone();
         }
     }
 
@@ -205,52 +196,12 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         if (previousEvent == null) {
             return true;
         }
-        return Math.abs(event.values[0] - previousX) > MAGNETIC_FIELD_DELTA
-                || Math.abs(event.values[1] - previousY) > MAGNETIC_FIELD_DELTA
-                || Math.abs(event.values[2] - previousZ) > MAGNETIC_FIELD_DELTA;
+        return Math.abs(event.values[0] - previousEvent[0]) > MAGNETIC_FIELD_DELTA
+                || Math.abs(event.values[1] - previousEvent[1]) > MAGNETIC_FIELD_DELTA
+                || Math.abs(event.values[2] - previousEvent[2]) > MAGNETIC_FIELD_DELTA;
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client.connect();
-        Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "WifiSignalReader Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
-                Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
-                Uri.parse("android-app://navigation.tw.com.twnavigation/http/host/path")
-        );
-        AppIndex.AppIndexApi.start(client, viewAction);
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "WifiSignalReader Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
-                Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
-                Uri.parse("android-app://navigation.tw.com.twnavigation/http/host/path")
-        );
-        AppIndex.AppIndexApi.end(client, viewAction);
-        client.disconnect();
     }
 }
