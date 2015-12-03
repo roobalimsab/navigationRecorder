@@ -14,6 +14,7 @@ import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -35,7 +36,8 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
     private static final String TAG = "WifiSingnalReader";
     private static final float MAGNETIC_FIELD_DELTA = 5;
-    private static final long REFRESH_DURATION = 20000;
+    private static final long REFRESH_DURATION = 200;
+    public static final int WIFI_SIGNAL_MAX_LEVELS = 25;
 
     private LinearLayout networksView;
     private ScrollView scrollView;
@@ -51,13 +53,18 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case MSG_FETCH_WIFI_STRENGTH:
-                    readSignalStrength();
+                    startScan();
                     break;
             }
         }
     };
 
-    private Map<String, String> signalStrengths = new HashMap<>();
+    private void startScan() {
+        WifiManager wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
+        wifiManager.startScan();
+    }
+
+    private WifiSignals signalStrengths = new WifiSignals();
 
     private float[] previousEvent;
     private LocationDatabase locationDatabase;
@@ -111,6 +118,13 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
                         new BuildingLocation(locationName, signalStrengths, previousEvent));
             }
         });
+
+        findViewById(R.id.delete_db).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                locationDatabase.removeAll();
+            }
+        });
     }
 
     private BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
@@ -139,13 +153,13 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
     private void addNetwork(ScanResult ap) {
         if (ap.SSID.equalsIgnoreCase("twguest")) {
-            int strength = WifiManager.calculateSignalLevel(ap.level, 50);
-            addTextViewToLayout(networksView, ap.BSSID + " <-|-> " + strength);
-            signalStrengths.put(ap.BSSID, String.valueOf(strength));
+            int level = WifiManager.calculateSignalLevel(ap.level, WIFI_SIGNAL_MAX_LEVELS);
+            addTextViewToLayout(networksView, ap.BSSID + " <-|-> " + level);
+            signalStrengths.add(new WifiSignal(ap.BSSID, level));
         }
     }
 
-    private void findOutCurrentLocation(Map<String, String> currentSignals) {
+    private void findOutCurrentLocation(WifiSignals currentSignals) {
         List<BuildingLocation> buildingLocations = locationDatabase.fetchRecordedLocations();
         addTextViewToLayout(matchedLocationsView, "db has " + buildingLocations.size() + " locations");
         List<BuildingLocation> matchingLocations = findMatch(buildingLocations, currentSignals);
@@ -165,9 +179,11 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
     private List<BuildingLocation> findMatch(
             List<BuildingLocation> buildingLocations,
-            Map<String, String> currentSignals) {
+            WifiSignals currentSignals) {
+        Log.d(TAG, "currentSignals: " + BuildingLocation.getWifiSignalsAsString(currentSignals));
         List<BuildingLocation> matchedLocations = new ArrayList<>();
         for(BuildingLocation location : buildingLocations) {
+            Log.d(TAG, location.getName() + " ->: " + location.getWifiSignalsAsString());
             if (location.isMatching(currentSignals)) {
                 matchedLocations.add(location);
             }
