@@ -10,14 +10,14 @@ public class BuildingLocation {
 
     BuildingLocation(String locationName, String signalString, float[] mfValues) {
         this.name = locationName;
-        this.wifiSignals = WifiSignals.fromString(signalString);
+        this.wifiSignals = WifiSignals.fromString(signalString).sortByLevel();
         this.mfValues = mfValues;
     }
 
-    BuildingLocation(String locationName, WifiSignals signals, float[] mfValues) {
+    BuildingLocation(String locationName, WifiSignals signals) {
         this.name = locationName;
         this.wifiSignals = signals;
-        this.mfValues = mfValues;
+        this.mfValues = new float[] {0f, 0f, 0f};
     }
 
     public String getName() {
@@ -38,6 +38,11 @@ public class BuildingLocation {
 
     public boolean isMatching(WifiSignals currentSignals) {
         return matcher.isMatch(wifiSignals, currentSignals);
+    }
+
+    // TODO: refactor this
+    public int getMatchWeight(WifiSignals currentSignals) {
+        return matcher.findWeight(wifiSignals, currentSignals);
     }
 
     public String getWifiSignalsAsString() {

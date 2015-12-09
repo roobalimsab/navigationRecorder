@@ -6,7 +6,6 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.support.annotation.NonNull;
 
 import java.util.*;
 
@@ -49,7 +48,6 @@ public class LocationDatabase extends SQLiteOpenHelper {
                 constructLocationValues(location));
     }
 
-    @NonNull
     private ContentValues constructLocationValues(BuildingLocation location) {
         ContentValues values = new ContentValues();
         values.put(COLUMN_NAME, location.getName());

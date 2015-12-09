@@ -1,6 +1,8 @@
 package navigation.tw.com.twnavigation;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class WifiSignals extends ArrayList<WifiSignal> {
     public static final String SIGNAL_SEPERATOR = "__";
@@ -13,6 +15,16 @@ public class WifiSignals extends ArrayList<WifiSignal> {
             }
         }
         return null;
+    }
+
+    public WifiSignals sortByLevel() {
+       Collections.sort(this, new Comparator<WifiSignal>() {
+           @Override
+           public int compare(WifiSignal lhs, WifiSignal rhs) {
+               return Integer.compare(lhs.getLevel(), rhs.getLevel());
+           }
+       });
+        return this;
     }
 
     @Override
@@ -37,6 +49,6 @@ public class WifiSignals extends ArrayList<WifiSignal> {
             String[] keyValue = value.split(VALUE_SEPERATOR);
             wifiSignals.add(new WifiSignal(keyValue[0], Integer.valueOf(keyValue[1])));
         }
-        return wifiSignals;
+        return wifiSignals.sortByLevel();
     }
 }
