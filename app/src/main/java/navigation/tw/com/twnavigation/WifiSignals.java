@@ -37,7 +37,9 @@ public class WifiSignals extends ArrayList<WifiSignal> {
         for (WifiSignal signal : wifiSignals) {
             wifiSignalString = wifiSignalString + signal.getId() + VALUE_SEPERATOR + signal.getLevel() + SIGNAL_SEPERATOR;
         }
-        wifiSignalString = wifiSignalString.substring(0, wifiSignalString.length() - 2);
+        if (wifiSignalString.length() > 2) {
+            wifiSignalString = wifiSignalString.substring(0, wifiSignalString.length() - 2);
+        }
         return wifiSignalString;
     }
 

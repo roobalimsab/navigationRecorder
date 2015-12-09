@@ -21,7 +21,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 import static android.net.ConnectivityManager.CONNECTIVITY_ACTION;
 import static android.net.wifi.WifiManager.RSSI_CHANGED_ACTION;
@@ -36,6 +39,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
     private static final long REFRESH_DURATION = 100;
     public static final int WIFI_SIGNAL_MAX_LEVELS = 25;
     public static final int MIN_WIFI_LEVEL = 10;
+    public static final int SNAPSHOT_RECORD_LIMIT = 25;
 
     private LinearLayout networksView;
     private ScrollView scrollView;
@@ -64,6 +68,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
     private LinearLayout matchedLocationsView;
     private TextView recordLocationView;
     private LocationRecorder locationRecorder;
+    private String recordingLocationName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,7 +80,6 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         setupSensorReceivers();
 
         locationDatabase = new LocationDatabase(this);
-        locationRecorder = new LocationRecorder(locationDatabase);
         H.sendEmptyMessage(MSG_FETCH_WIFI_STRENGTH);
     }
 
@@ -141,7 +145,9 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         if (locationName.isEmpty()) {
             return;
         }
-        locationRecorder.startRecording(locationName);
+        recordingLocationName = locationName;
+        locationRecorder = new LocationRecorder();
+        recordLocationView.setText("recording...");
     }
 
     private BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
@@ -171,10 +177,13 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         signalStrengths.sortByLevel();
         findOutCurrentLocation(signalStrengths);
 
-        if (locationRecorder.record(signalStrengths)) {
+        int recordCount = locationRecorder.record(signalStrengths);
+        if (recordCount >= SNAPSHOT_RECORD_LIMIT) {
+            recordLocationView.setText("saving...");
+            locationDatabase.recordLocation(new BuildingLocation(recordingLocationName, locationRecorder.stop()));
             recordLocationView.setText("Record");
         } else {
-            recordLocationView.setText("Recording...");
+            recordLocationView.setText("Recording..." + recordCount);
         }
 
         scrollView.fullScroll(View.FOCUS_DOWN);

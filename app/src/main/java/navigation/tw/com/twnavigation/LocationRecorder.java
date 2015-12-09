@@ -8,37 +8,15 @@ import java.util.Map;
 
 public class LocationRecorder {
 
-    public static final int SNAPSHOT_RECORD_LIMIT = 25;
-    private boolean isRecording = false;
     private List<WifiSignals> snapshots = new ArrayList<>();
-    private String recordingLocationName;
-    private LocationDatabase locationDatabase;
 
-    public LocationRecorder(LocationDatabase locationDatabase) {
-        this.locationDatabase = locationDatabase;
+    public int record(WifiSignals wifiSignals) {
+        snapshots.add(wifiSignals);
+        return snapshots.size();
     }
 
-    public void startRecording(String name) {
-        isRecording = true;
-        recordingLocationName = name;
-    }
-
-    public boolean record(WifiSignals wifiSignals) {
-        if (isRecording) {
-            if (snapshots.size() >= SNAPSHOT_RECORD_LIMIT) {
-                WifiSignals avgSignals = findAverageSignal(snapshots);
-                locationDatabase.recordLocation(
-                        new BuildingLocation(recordingLocationName, avgSignals));
-                recordingLocationName = null;
-                snapshots.clear();
-                isRecording = false;
-                return true;
-            } else {
-                snapshots.add(wifiSignals);
-                return false;
-            }
-        }
-        return true;
+    public WifiSignals stop() {
+        return findAverageSignal(snapshots);
     }
 
     public WifiSignals findAverageSignal(List<WifiSignals> snapshots) {
@@ -57,7 +35,7 @@ public class LocationRecorder {
         WifiSignals averageSignals = new WifiSignals();
         for (String id : levelsMap.keySet()) {
             List<Integer> levels = levelsMap.get(id);
-            if (levels.size() >= SNAPSHOT_RECORD_LIMIT) {
+            if (levels.size() == snapshots.size()) {
                 averageSignals.add(new WifiSignal(id, findAverage(levels)));
             }
         }
