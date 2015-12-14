@@ -40,6 +40,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
     public static final int WIFI_SIGNAL_MAX_LEVELS = 25;
     public static final int MIN_WIFI_LEVEL = 10;
     public static final int SNAPSHOT_RECORD_LIMIT = 25;
+    private static final int CURRENT_SIGNAL_RECORD_LIMIT = 5;
 
     private LinearLayout networksView;
     private ScrollView scrollView;
@@ -80,6 +81,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         setupSensorReceivers();
 
         locationDatabase = new LocationDatabase(this);
+        locationRecorder = new LocationRecorder();
         H.sendEmptyMessage(MSG_FETCH_WIFI_STRENGTH);
     }
 
@@ -147,6 +149,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         }
         recordingLocationName = locationName;
         locationRecorder = new LocationRecorder();
+        recordFingerPrint();
         recordLocationView.setText("recording...");
     }
 
@@ -164,7 +167,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
     private void readSignalStrength() {
         networksView.removeAllViews();
-        matchedLocationsView.removeAllViews();
+//        matchedLocationsView.removeAllViews();
         signalStrengths.clear();
 
         WifiManager wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
@@ -175,10 +178,24 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         }
 
         signalStrengths.sortByLevel();
-        findOutCurrentLocation(signalStrengths);
-        recordFingerPrint();
+        getAverageofCurrentSignals();
+//        findOutCurrentLocation(signalStrengths);
+//        recordFingerPrint();
         scrollView.fullScroll(View.FOCUS_DOWN);
         H.sendEmptyMessageDelayed(MSG_FETCH_WIFI_STRENGTH, REFRESH_DURATION);
+    }
+
+    private void getAverageofCurrentSignals() {
+        if(locationRecorder == null) {
+            locationRecorder = new LocationRecorder();
+        }
+        int recordCount = locationRecorder.record(signalStrengths);
+        if (recordCount >= CURRENT_SIGNAL_RECORD_LIMIT) {
+            matchedLocationsView.removeAllViews();
+            WifiSignals averageSignalStrengths = locationRecorder.stop();
+            findOutCurrentLocation(averageSignalStrengths);
+            locationRecorder = new LocationRecorder();
+        }
     }
 
     private void recordFingerPrint() {
