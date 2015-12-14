@@ -176,18 +176,23 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
 
         signalStrengths.sortByLevel();
         findOutCurrentLocation(signalStrengths);
-
-        int recordCount = locationRecorder.record(signalStrengths);
-        if (recordCount >= SNAPSHOT_RECORD_LIMIT) {
-            recordLocationView.setText("saving...");
-            locationDatabase.recordLocation(new BuildingLocation(recordingLocationName, locationRecorder.stop()));
-            recordLocationView.setText("Record");
-        } else {
-            recordLocationView.setText("Recording..." + recordCount);
-        }
-
+        recordFingerPrint();
         scrollView.fullScroll(View.FOCUS_DOWN);
         H.sendEmptyMessageDelayed(MSG_FETCH_WIFI_STRENGTH, REFRESH_DURATION);
+    }
+
+    private void recordFingerPrint() {
+        if (locationRecorder != null) {
+            int recordCount = locationRecorder.record(signalStrengths);
+            if (recordCount >= SNAPSHOT_RECORD_LIMIT) {
+                recordLocationView.setText("saving...");
+                locationDatabase.recordLocation(new BuildingLocation(recordingLocationName, locationRecorder.stop()));
+                recordLocationView.setText("Record");
+                locationRecorder = null;
+            } else {
+                recordLocationView.setText("Recording..." + recordCount);
+            }
+        }
     }
 
     private void addSignal(ScanResult ap) {
@@ -214,7 +219,7 @@ public class WifiSignalReaderActivity extends Activity implements SensorEventLis
         Collections.sort(matchingLocations, new Comparator<MatchedLocation>() {
             @Override
             public int compare(MatchedLocation lhs, MatchedLocation rhs) {
-                return Integer.compare(rhs.weight, lhs.weight);
+                return Integer.compare(lhs.weight, rhs.weight);
             }
         });
 

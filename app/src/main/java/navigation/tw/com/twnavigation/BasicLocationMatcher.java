@@ -28,7 +28,7 @@ public class BasicLocationMatcher {
                 if (Math.abs(strength - oldStrength) <= STRENGTH_DELTA) {
                     matches++;
 //                    System.out.println("delta " + Math.abs(strength - oldStrength));
-                    deltaSum += oldStrength;
+                    deltaSum += (STRENGTH_DELTA - Math.abs(strength - oldStrength));
                 }
             }
         }
